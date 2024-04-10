@@ -91,6 +91,7 @@ public class SecureConnectionGUI_2 {
 
             Thread messageReceiverThread = new Thread(new MessageReceiver());
             messageReceiverThread.start();
+
         } catch (Exception e) {
             e.printStackTrace();
             System.exit(0);
@@ -146,8 +147,10 @@ public class SecureConnectionGUI_2 {
     private static void sendEncryptedMessage(String message) {
         try {
             byte[] encryptedMessage = encryptMessage(message);
-            outputStream.writeInt(encryptedMessage.length);
-            outputStream.write(encryptedMessage);
+            if (outputStream != null) {
+                outputStream.writeInt(encryptedMessage.length);
+                outputStream.write(encryptedMessage);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -178,4 +181,3 @@ public class SecureConnectionGUI_2 {
         }
     }
 }
-
