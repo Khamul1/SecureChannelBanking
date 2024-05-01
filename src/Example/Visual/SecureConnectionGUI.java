@@ -11,6 +11,9 @@ import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
 import javax.crypto.spec.IvParameterSpec;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 
 public class SecureConnectionGUI {
     private JFrame frame;
@@ -26,6 +29,7 @@ public class SecureConnectionGUI {
     private PrivateKey privateKey;
     private SecretKey symmetricKey;
     private Cipher aesCipher;
+
 
     public static void main(String[] args) {
         new SecureConnectionGUI().initGUI();
@@ -58,6 +62,7 @@ public class SecureConnectionGUI {
         generateKeys();
         sendPublicKey();
     }
+
 
     private void setupConnection() {
         try {
@@ -115,11 +120,11 @@ public class SecureConnectionGUI {
             String base64EncryptedMessage = Base64.getEncoder().encodeToString(encryptedMessage);
             outputStream.writeUTF("MESSAGE");
             outputStream.writeUTF(base64EncryptedMessage);
-            chatArea.append("Me: " + message + "\n");
+            chatArea.append("[" + getCurrentTimestamp() + "] Me: " + message + "\n");
             messageField.setText("");
-            System.out.println("Encrypted message sent: " + base64EncryptedMessage);
+            System.out.println("[" + getCurrentTimestamp() + "] Encrypted message sent: " + base64EncryptedMessage);
         } catch (Exception ex) {
-            System.err.println("Error encrypting or sending message: " + ex.getMessage());
+            System.err.println("[" + getCurrentTimestamp() + "] Error encrypting or sending message: " + ex.getMessage());
             ex.printStackTrace();
         }
     }
@@ -191,13 +196,17 @@ public class SecureConnectionGUI {
     private void handleMessage(String encryptedMessage) {
         try {
             byte[] cipherText = Base64.getDecoder().decode(encryptedMessage);
-            aesCipher.init(Cipher.DECRYPT_MODE, symmetricKey, new IvParameterSpec(new byte[16]));  // Same IV should be used as was used for encryption
+            aesCipher.init(Cipher.DECRYPT_MODE, symmetricKey, new IvParameterSpec(new byte[16]));  // Same IV should be used as was used for encryption  // Same IV should be used as was used for encryption
             String message = new String(aesCipher.doFinal(cipherText));
-            chatArea.append("Other: " + message + "\n");
-            System.out.println("Decrypted message received and displayed: " + message);
+            chatArea.append("[" + getCurrentTimestamp() + "] Other: " + message + "\n");
+            System.out.println("[" + getCurrentTimestamp() + "] Decrypted message received and displayed: " + message);
         } catch (GeneralSecurityException e) {
-            System.err.println("Error decrypting message: " + e.getMessage());
+            System.err.println("[" + getCurrentTimestamp() + "] Error decrypting message: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+    private String getCurrentTimestamp() {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+        return LocalDateTime.now().format(formatter);
     }
 }
