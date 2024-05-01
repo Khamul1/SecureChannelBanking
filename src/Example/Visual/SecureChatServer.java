@@ -2,6 +2,8 @@ package Example.Visual;
 
 import java.io.*;
 import java.net.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SecureChatServer {
@@ -15,11 +17,11 @@ public class SecureChatServer {
 
     private void startServer() throws IOException {
         serverSocket = new ServerSocket(8080);
-        System.out.println("Server started on port 8080.");
+        System.out.println("[" + getCurrentTimestamp() + "] Server started on port 8080.");
         while (true) {
             Socket socket = serverSocket.accept();
             String clientKey = socket.getInetAddress().getHostAddress() + ":" + socket.getPort();
-            System.out.println("New client connected from: " + clientKey);
+            System.out.println("[" + getCurrentTimestamp() + "] New client connected from: " + clientKey);
             ClientHandler client = new ClientHandler(socket, clientKey);
             clients.put(clientKey, client);
             new Thread(client).start();
@@ -37,7 +39,7 @@ public class SecureChatServer {
             this.clientKey = clientKey;
             inputStream = new DataInputStream(socket.getInputStream());
             outputStream = new DataOutputStream(socket.getOutputStream());
-            System.out.println("Streams opened for client " + clientKey);
+            System.out.println("[" + getCurrentTimestamp() + "] Streams opened for client " + clientKey);
         }
 
         @Override
@@ -45,7 +47,7 @@ public class SecureChatServer {
             try {
                 while (!socket.isClosed()) {
                     String header = inputStream.readUTF();
-                    System.out.println(clientKey + " sent header: " + header);
+                    System.out.println("[" + getCurrentTimestamp() + "] " + clientKey + " sent header: " + header);
                     switch (header) {
                         case "PUBLIC_KEY":
                             handlePublicKey();
@@ -59,7 +61,7 @@ public class SecureChatServer {
                     }
                 }
             } catch (IOException e) {
-                System.out.println(clientKey + " disconnected: " + e.getMessage());
+                System.out.println("[" + getCurrentTimestamp() + "] " + clientKey + " disconnected: " + e.getMessage());
             } finally {
                 closeConnection();
             }
@@ -67,20 +69,21 @@ public class SecureChatServer {
 
         private void handlePublicKey() throws IOException {
             String publicKey = inputStream.readUTF();
-            System.out.println(clientKey + " sent public key: " + publicKey);
+            System.out.println("[" + getCurrentTimestamp() + "] " + clientKey + " sent public key: " + publicKey);
             broadcastPublicKey(publicKey);
         }
 
         private void handleEncryptedKey() throws IOException {
             String encryptedKey = inputStream.readUTF();
             String recipient = inputStream.readUTF();
-            System.out.println(clientKey + " sent encrypted key for " + recipient);
+            System.out.println("[" + getCurrentTimestamp() + "] " + clientKey + " sent encrypted key for " + recipient);
             sendEncryptedKey(encryptedKey, recipient);
         }
 
         private void handleMessage() throws IOException {
             String message = inputStream.readUTF();
-            System.out.println(clientKey + " sent message: " + message);
+
+            System.out.println("[" + getCurrentTimestamp() + "] " + clientKey + " sent message: " + message);
             broadcastMessage(message);
         }
 
@@ -90,9 +93,9 @@ public class SecureChatServer {
                     try {
                         handler.outputStream.writeUTF("PUBLIC_KEY");
                         handler.outputStream.writeUTF(publicKey);
-                        System.out.println("Broadcasted public key from " + clientKey + " to " + key);
+                        System.out.println("[" + getCurrentTimestamp() + "] Broadcasted public key from " + clientKey + " to " + key);
                     } catch (IOException e) {
-                        System.out.println("Failed to send public key to " + key + ": " + e.getMessage());
+                        System.out.println("[" + getCurrentTimestamp() + "] Failed to send public key to " + key + ": " + e.getMessage());
                     }
                 }
             });
@@ -104,10 +107,12 @@ public class SecureChatServer {
                 try {
                     handler.outputStream.writeUTF("ENCRYPTED_KEY");
                     handler.outputStream.writeUTF(encryptedKey);
-                    System.out.println("Sent encrypted key from " + clientKey + " to " + recipient);
+                    handler.outputStream.writeUTF(clientKey);
                 } catch (IOException e) {
-                    System.out.println("Failed to send encrypted key to " + recipient + ": " + e.getMessage());
+                    System.out.println("[" + getCurrentTimestamp() + "] Failed to send encrypted key to " + recipient + ": " + e.getMessage());
                 }
+            } else {
+                System.out.println("[" + getCurrentTimestamp() + "] Recipient " + recipient + " not found.");
             }
         }
 
@@ -117,9 +122,9 @@ public class SecureChatServer {
                     try {
                         handler.outputStream.writeUTF("MESSAGE");
                         handler.outputStream.writeUTF(message);
-                        System.out.println("Broadcasted message from " + clientKey + " to " + key);
+                        handler.outputStream.writeUTF(clientKey);
                     } catch (IOException e) {
-                        System.out.println("Failed to broadcast message to " + key + ": " + e.getMessage());
+                        System.out.println("[" + getCurrentTimestamp() + "] Failed to send message to " + key + ": " + e.getMessage());
                     }
                 }
             });
@@ -127,12 +132,26 @@ public class SecureChatServer {
 
         private void closeConnection() {
             try {
-                clients.remove(clientKey);
-                socket.close();
-                System.out.println("Closed connection for " + clientKey);
+                inputStream.close();
             } catch (IOException e) {
-                System.out.println("Error closing connection for " + clientKey + ": " + e.getMessage());
+                System.out.println("[" + getCurrentTimestamp() + "] Failed to close input stream for " + clientKey + ": " + e.getMessage());
             }
+            try {
+                outputStream.close();
+            } catch (IOException e) {
+                System.out.println("[" + getCurrentTimestamp() + "] Failed to close output stream for " + clientKey + ": " + e.getMessage());
+            }
+            try {
+                socket.close();
+            } catch (IOException e) {
+                System.out.println("[" + getCurrentTimestamp() + "] Failed to close socket for " + clientKey + ": " + e.getMessage());
+            }
+            clients.remove(clientKey);
         }
+    }
+
+    private String getCurrentTimestamp() {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+        return LocalDateTime.now().format(formatter);
     }
 }
