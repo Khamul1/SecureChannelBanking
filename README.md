@@ -1,21 +1,29 @@
+# SecureChatApplication
 
-  SecureChannelBanking is a client and server program to provide a secure communication channel in the banking industry. These programs allow you to exchange encrypted messages between a client and a server, 
-using symmetric and asymmetric encryption to ensure confidentiality and data integrity.
+SecureChatApplication is a Java-based application that simulates a secure chat between two clients. It provides a graphical user interface for each client and an activity monitor to log the interactions.
 
-  Functionality
+## Functionality
 
-  Client program
+### SecureChatApplication
 
-- Generating an RSA key pair for the client
-- Generation of a symmetric AES key for message encryption
-- Establishing a secure connection with the server via a socket
-- Public key exchange for asymmetric encryption
-- Transfer of encrypted symmetric key over a secure connection
-- Encrypt and send messages using a symmetric key
-- Receive and decrypt encrypted messages from the server
+- Initializes two chat clients and an activity monitor
+- Connects the two chat clients to simulate a chat
+- Logs the start of the application and any messages sent between clients
 
-  Server program
+### ChatClient
 
-- Accepting connections from clients via socket
-- Supports multiple client connections
-- Transfer of encrypted messages between clients
+- Represents a chat client in the application
+- Connects to another chat client to simulate a chat
+
+### ActivityMonitor
+
+- Provides a graphical user interface to display logged messages
+- Logs formatted messages with timestamps and client names
+
+## Running the Application
+
+To run the application, execute the `main` method in the `SecureChatApplication` class. This will initialize the application and open the graphical user interfaces for the chat clients and the activity monitor.
+```bash
+cd src
+javac SecureChatApplication.java && java SecureChatApplication
+```
