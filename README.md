@@ -24,5 +24,6 @@ SecureChatApplication is a Java-based application that simulates a secure chat b
 
 To run the application, execute the `main` method in the `SecureChatApplication` class. This will initialize the application and open the graphical user interfaces for the chat clients and the activity monitor.
 ```bash
-javac src/SecureChatApplication.java && java src/SecureChatApplication
+cd src
+javac SecureChatApplication.java && java SecureChatApplication
 ```
