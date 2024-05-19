@@ -1,23 +1,20 @@
 import javax.swing.*;
 import javax.swing.text.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
-import java.security.PrivateKey;
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
+import java.awt.datatransfer.*;
+import java.awt.dnd.*;
+import java.awt.event.*;
+import java.io.*;
+import java.nio.file.Files;
+import java.security.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.security.GeneralSecurityException;
 import java.util.Base64;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.BadPaddingException;
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.awt.Graphics2D;
 
 public class SecureChatApplication {
     private ChatClient chatClient1;
@@ -47,7 +44,7 @@ public class SecureChatApplication {
         String formattedMessage = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSS")) +
             " - " + (clientName != null ? ('[' + clientName + ']' + ": ") : "") + message;
         activityMonitor.log(formattedMessage);
-        // System.out.println(formattedMessage); // turn of for console logging
+        // System.out.println(formattedMessage); // turn off for console logging
     }
 }
 
@@ -64,6 +61,7 @@ class ChatClient {
     private PrivateKey privateKey;
     private SecretKey symmetricKey;
     private JPanel bottomPanel;
+    private JButton sendButton, imageButton;
 
     public ChatClient(String clientName, SecureChatApplication app, int x, int y) {
         this.clientName = clientName;
@@ -102,10 +100,82 @@ class ChatClient {
         });
         bottomPanel.add(messageField, BorderLayout.CENTER);
 
-        JButton sendButton = new JButton("Send");
+        sendButton = new JButton("Send");
         sendButton.addActionListener(e -> sendMessage());
         bottomPanel.add(sendButton, BorderLayout.EAST);
+
+        imageButton = new JButton("Send Image");
+        imageButton.addActionListener(e -> selectAndSendImage());
+        bottomPanel.add(imageButton, BorderLayout.WEST);
+
         frame.setLocation(x, y);
+        frame.add(bottomPanel, BorderLayout.SOUTH);
+
+        // Enable drag-and-drop for images
+        new DropTarget(chatPane, new DropTargetAdapter() {
+            @Override
+            public void drop(DropTargetDropEvent dtde) {
+                try {
+                    dtde.acceptDrop(DnDConstants.ACTION_COPY);
+                    Transferable t = dtde.getTransferable();
+                    if (t.isDataFlavorSupported(DataFlavor.imageFlavor)) {
+                        Image image = (Image) t.getTransferData(DataFlavor.imageFlavor);
+                        sendImage(image);
+                    } else if (t.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                        java.util.List<File> files = (java.util.List<File>) t.getTransferData(DataFlavor.javaFileListFlavor);
+                        for (File file : files) {
+                            if (isImageFile(file)) {
+                                Image image = ImageIO.read(file);
+                                sendImage(image);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+    private void selectAndSendImage() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
+            @Override
+            public boolean accept(File f) {
+                if (f.isDirectory()) {
+                    return true;
+                }
+                String name = f.getName().toLowerCase();
+                return name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".gif") || name.endsWith(".bmp");
+            }
+
+            @Override
+            public String getDescription() {
+                return "Image Files";
+            }
+        });
+
+        int returnValue = fileChooser.showOpenDialog(frame);
+        if (returnValue == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            try {
+                BufferedImage image = ImageIO.read(file);
+                sendImage(image);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    private boolean isImageFile(File file) {
+        String[] imageExtensions = { "png", "jpg", "jpeg", "gif", "bmp" };
+        String fileName = file.getName().toLowerCase();
+        for (String ext : imageExtensions) {
+            if (fileName.endsWith(ext)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void generateAsymmetricKeys() {
@@ -219,7 +289,6 @@ class ChatClient {
     public void markConnectionEstablished() {
         app.log("Connection established for " + clientName, clientName);
         SwingUtilities.invokeLater(() -> {
-            frame.add(bottomPanel, BorderLayout.SOUTH);
             frame.setVisible(true);
             app.log("Showing GUI for " + clientName, clientName);
             frame.toFront();
@@ -227,13 +296,13 @@ class ChatClient {
         });
     }
 
-    private String encryptMessage(String message) {
+    private String encryptMessage(byte[] message) {
         try {
             Cipher cipher = Cipher.getInstance("AES");
             cipher.init(Cipher.ENCRYPT_MODE, symmetricKey);
-            byte[] encryptedBytes = cipher.doFinal(message.getBytes());
+            byte[] encryptedBytes = cipher.doFinal(message);
             String encryptedMessage = Base64.getEncoder().encodeToString(encryptedBytes);
-            app.log("Encrypted message sent: " + encryptedMessage, clientName);
+            app.log("Message encrypted: " + encryptedMessage, clientName);
             return encryptedMessage;
         } catch (GeneralSecurityException e) {
             e.printStackTrace();
@@ -241,38 +310,53 @@ class ChatClient {
         }
     }
 
-    private String decryptMessage(String encryptedMessage) {
+    private byte[] decryptMessage(String encryptedMessage) {
         try {
             Cipher cipher = Cipher.getInstance("AES");
             cipher.init(Cipher.DECRYPT_MODE, symmetricKey);
             byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(encryptedMessage));
-            String decryptedMessage = new String(decryptedBytes);
-            app.log("Decrypted message received: " + decryptedMessage, clientName);
-            return decryptedMessage;
+            app.log("Message decrypted: " + new String(decryptedBytes), clientName);
+            return decryptedBytes;
         } catch (GeneralSecurityException e) {
             e.printStackTrace();
             return null;
         }
     }
 
-    public void receiveMessage(String encryptedMessage) {
+    public void receiveMessage(String encryptedMessage, String type) {
         app.log("Received encrypted message: " + encryptedMessage, clientName);
-        String message = decryptMessage(encryptedMessage);
-        try {
-            chatDocument.insertString(chatDocument.getLength(), otherChatClient.clientName + ": ", styleBold);
-            chatDocument.insertString(chatDocument.getLength(), message + "\n", styleNormal);
-            StyleConstants.setAlignment(styleNormal, StyleConstants.ALIGN_LEFT);
-            chatDocument.setParagraphAttributes(chatDocument.getLength() - message.length() - 1, message.length() + 1, styleNormal, false);
-        } catch (BadLocationException e) {
-            e.printStackTrace();
+        byte[] messageBytes = decryptMessage(encryptedMessage);
+        if (messageBytes == null) {
+            return;
         }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                if ("text".equals(type)) {
+                    String message = new String(messageBytes);
+                    chatDocument.insertString(chatDocument.getLength(), otherChatClient.clientName + ": ", styleBold);
+                    chatDocument.insertString(chatDocument.getLength(), message + "\n", styleNormal);
+                    StyleConstants.setAlignment(styleNormal, StyleConstants.ALIGN_LEFT);
+                    chatDocument.setParagraphAttributes(chatDocument.getLength() - message.length() - 1, message.length() + 1, styleNormal, false);
+                } else if ("image".equals(type)) {
+                    ImageIcon imageIcon = new ImageIcon(messageBytes);
+                    chatDocument.insertString(chatDocument.getLength(), otherChatClient.clientName + ": ", styleBold);
+                    chatPane.setCaretPosition(chatDocument.getLength());
+                    chatPane.insertIcon(imageIcon);
+                    chatDocument.insertString(chatDocument.getLength(), "\n", styleNormal);
+                    StyleConstants.setAlignment(styleNormal, StyleConstants.ALIGN_LEFT);
+                }
+            } catch (BadLocationException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     public void sendMessage() {
         String message = messageField.getText().trim();
         app.log("Sending message: " + message, clientName);
         if (!message.isEmpty()) {
-            String encryptedMessage = encryptMessage(message);
+            byte[] messageBytes = message.getBytes();
+            String encryptedMessage = encryptMessage(messageBytes);
             try {
                 chatDocument.insertString(chatDocument.getLength(), "You: ", styleBold);
                 chatDocument.insertString(chatDocument.getLength(), message + "\n", styleNormal);
@@ -282,8 +366,185 @@ class ChatClient {
                 e.printStackTrace();
             }
             messageField.setText("");
-            otherChatClient.receiveMessage(encryptedMessage);
+            otherChatClient.receiveMessage(encryptedMessage, "text");
         }
+    }
+
+    public void sendImage() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
+            @Override
+            public boolean accept(File f) {
+                if (f.isDirectory()) {
+                    return true;
+                }
+                String name = f.getName().toLowerCase();
+                return name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".gif") || name.endsWith(".bmp");
+            }
+
+            @Override
+            public String getDescription() {
+                return "Image Files";
+            }
+        });
+
+        int returnValue = fileChooser.showOpenDialog(frame);
+        if (returnValue == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            try {
+                byte[] imageBytes = Files.readAllBytes(file.toPath());
+                sendImage(imageBytes);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void sendImage(byte[] imageBytes) {
+        String encryptedMessage = encryptMessage(imageBytes);
+        try {
+            chatDocument.insertString(chatDocument.getLength(), "You: ", styleBold);
+            chatPane.setCaretPosition(chatDocument.getLength());
+            chatPane.insertIcon(new ImageIcon(imageBytes));
+            chatDocument.insertString(chatDocument.getLength(), "\n", styleNormal);
+            StyleConstants.setAlignment(styleNormal, StyleConstants.ALIGN_RIGHT);
+        } catch (BadLocationException e) {
+            e.printStackTrace();
+        }
+        otherChatClient.receiveMessage(encryptedMessage, "image");
+    }
+
+    public void sendImage(Image image) {
+        try {
+            app.log("Starting image conversion to BufferedImage", clientName);
+    
+            BufferedImage bufferedImage = new BufferedImage(image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = bufferedImage.createGraphics();
+            g2.drawImage(image, 0, 0, null);
+            g2.dispose();
+    
+            app.log("Image converted to BufferedImage, starting encryption", clientName);
+    
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(bufferedImage, "png", baos);
+            byte[] imageBytes = baos.toByteArray();
+    
+            int totalBytes = imageBytes.length;
+            int processedBytes = 0;
+    
+            ByteArrayOutputStream encryptedBaos = new ByteArrayOutputStream();
+    
+            Cipher cipher = Cipher.getInstance("AES");
+            cipher.init(Cipher.ENCRYPT_MODE, symmetricKey);
+    
+            long startTime = System.currentTimeMillis();
+            for (int i = 0; i < totalBytes; ) {
+                int chunkSize = Math.min(1024, totalBytes - i);
+                byte[] chunk = cipher.update(imageBytes, i, chunkSize);
+                if (chunk != null) {
+                    encryptedBaos.write(chunk);
+                }
+                processedBytes += chunkSize;
+                i += chunkSize;
+    
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - startTime >= 1000) {
+                    app.log("Encryption progress: " + (processedBytes * 100 / totalBytes) + "%", clientName);
+                    startTime = currentTime;
+                }
+            }
+    
+            byte[] finalChunk = cipher.doFinal();
+            if (finalChunk != null) {
+                encryptedBaos.write(finalChunk);
+            }
+    
+            byte[] encryptedImageBytes = encryptedBaos.toByteArray();
+            app.log("Image encryption complete, sending image", clientName);
+    
+            displayImage(bufferedImage, "You");
+    
+            otherChatClient.receiveEncryptedImage(encryptedImageBytes);
+        } catch (GeneralSecurityException | IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void receiveEncryptedImage(byte[] encryptedImageBytes) {
+        app.log("Received encrypted image data", clientName);
+        decryptAndDisplayImage(encryptedImageBytes);
+    }
+
+    public void decryptAndDisplayImage(byte[] encryptedImageBytes) {
+        try {
+            app.log("Starting image decryption", clientName);
+
+            Cipher cipher = Cipher.getInstance("AES");
+            cipher.init(Cipher.DECRYPT_MODE, symmetricKey);
+
+            int totalBytes = encryptedImageBytes.length;
+            int processedBytes = 0;
+
+            ByteArrayOutputStream decryptedBaos = new ByteArrayOutputStream();
+
+            long startTime = System.currentTimeMillis();
+            for (int i = 0; i < totalBytes; ) {
+                int chunkSize = Math.min(1024, totalBytes - i);
+                byte[] chunk = cipher.update(encryptedImageBytes, i, chunkSize);
+                if (chunk != null) {
+                    decryptedBaos.write(chunk);
+                }
+                processedBytes += chunkSize;
+                i += chunkSize;
+
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - startTime >= 1000) {
+                    app.log("Decryption progress: " + (processedBytes * 100 / totalBytes) + "%", clientName);
+                    startTime = currentTime;
+                }
+            }
+
+            byte[] finalChunk = cipher.doFinal();
+            if (finalChunk != null) {
+                decryptedBaos.write(finalChunk);
+            }
+
+            byte[] decryptedImageBytes = decryptedBaos.toByteArray();
+            ByteArrayInputStream bais = new ByteArrayInputStream(decryptedImageBytes);
+            BufferedImage bufferedImage = ImageIO.read(bais);
+
+            app.log("Image decryption complete, rendering image", clientName);
+
+            displayImage(bufferedImage, otherChatClient.clientName);
+        } catch (GeneralSecurityException | IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void displayImage(BufferedImage image, String sender) {
+        JLabel picLabel = new JLabel(new ImageIcon(image));
+        SwingUtilities.invokeLater(() -> {
+            try {
+                boolean isSender = sender.equals("You");
+    
+                chatDocument.insertString(chatDocument.getLength(), sender + ": ", styleBold);
+                chatDocument.insertString(chatDocument.getLength(), "\n", styleNormal); // Add a newline before the image
+                chatPane.setCaretPosition(chatDocument.getLength());
+                chatPane.insertComponent(picLabel);
+                chatDocument.insertString(chatDocument.getLength(), "\n", styleNormal); // Add a newline after the image
+    
+                Style alignment = chatDocument.addStyle("alignment", null);
+                StyleConstants.setAlignment(alignment, isSender ? StyleConstants.ALIGN_RIGHT : StyleConstants.ALIGN_LEFT);
+                chatDocument.setParagraphAttributes(chatDocument.getLength() - 1, 1, alignment, false);
+    
+                // Apply alignment to the entire paragraph containing the sender label and image
+                int start = chatDocument.getLength() - (sender.length() + 3) - 1; // sender + ": " + newline
+                int length = chatDocument.getLength() - start;
+                chatDocument.setParagraphAttributes(start, length, alignment, false);
+            } catch (BadLocationException e) {
+                e.printStackTrace();
+            }
+        });
     }
 }
 
@@ -311,6 +572,9 @@ class ActivityMonitor {
     }
 
     public void log(String message) {
-        logArea.append(message + "\n");
+        SwingUtilities.invokeLater(() -> {
+            logArea.append(message + "\n");
+            logArea.setCaretPosition(logArea.getDocument().getLength());
+        });
     }
 }
