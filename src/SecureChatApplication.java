@@ -47,6 +47,7 @@ public class SecureChatApplication {
         String formattedMessage = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSS")) +
             " - " + (clientName != null ? ('[' + clientName + ']' + ": ") : "") + message;
         activityMonitor.log(formattedMessage);
+        // System.out.println(formattedMessage); // turn of for console logging
     }
 }
 
@@ -173,15 +174,46 @@ class ChatClient {
             app.log(clientName + " decrypted symmetric key received from " + otherChatClient.clientName +
                 "\n    Decrypted Symmetric Key: " + Base64.getEncoder().encodeToString(decryptedKeyBytes), clientName);
             markConnectionEstablished();
-            otherChatClient.receiveConnectionConfirmation();
+            sendConfirmationMessage("rutherfordium");
         } catch (GeneralSecurityException e) {
             e.printStackTrace();
         }
     }
 
-    private void receiveConnectionConfirmation() {
-        app.log(clientName + " received connection confirmation from " + otherChatClient.clientName, clientName);
-        markConnectionEstablished();
+    private void sendConfirmationMessage(String confirmationMessage) {
+        try {
+            Cipher cipher = Cipher.getInstance("AES");
+            cipher.init(Cipher.ENCRYPT_MODE, symmetricKey);
+            app.log(clientName + " encrypting confirmation message to " + otherChatClient.clientName, clientName);
+            byte[] encryptedMessage = cipher.doFinal(confirmationMessage.getBytes());
+            app.log(clientName + " sending encrypted confirmation message to " + otherChatClient.clientName +
+                "\n    Confirmation Message: " + confirmationMessage, clientName);
+            otherChatClient.receiveConnectionConfirmation(encryptedMessage);
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void receiveConnectionConfirmation(byte[] encryptedMessage) {
+        try {
+            Cipher cipher = Cipher.getInstance("AES");
+            cipher.init(Cipher.DECRYPT_MODE, symmetricKey);
+            byte[] decryptedMessageBytes = cipher.doFinal(encryptedMessage);
+            String decryptedMessage = new String(decryptedMessageBytes);
+            app.log(clientName + " received decrypted confirmation message from " + otherChatClient.clientName +
+                "\n    Decrypted Message: " + decryptedMessage, clientName);
+
+            if ("rutherfordium".equals(decryptedMessage)) {
+                app.log(clientName + " successfully confirmed symmetric key with " + otherChatClient.clientName, clientName);
+                markConnectionEstablished();
+            } else {
+                app.log(clientName + " error in confirming symmetric key with " + otherChatClient.clientName +
+                    "\n    Expected 'rutherfordium', but got '" + decryptedMessage + "'", clientName);
+            }
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
+            app.log(clientName + " failed to decrypt confirmation message", clientName);
+        }
     }
 
     public void markConnectionEstablished() {
