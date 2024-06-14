@@ -60,17 +60,17 @@ public class ImageUtils {
                 StyleConstants.setBold(styleBold, true);
 
                 chatDocument.insertString(chatDocument.getLength(), sender + ": ", styleBold);
-                chatDocument.insertString(chatDocument.getLength(), "\n", styleBold); // Add a newline before the image
+                chatDocument.insertString(chatDocument.getLength(), "\n", styleBold); 
                 chatPane.setCaretPosition(chatDocument.getLength());
                 chatPane.insertComponent(picLabel);
-                chatDocument.insertString(chatDocument.getLength(), "\n", styleBold); // Add a newline after the image
+                chatDocument.insertString(chatDocument.getLength(), "\n", styleBold); 
 
                 Style alignment = chatDocument.addStyle("alignment", null);
                 StyleConstants.setAlignment(alignment, isSender ? StyleConstants.ALIGN_RIGHT : StyleConstants.ALIGN_LEFT);
                 chatDocument.setParagraphAttributes(chatDocument.getLength() - 1, 1, alignment, false);
 
                 // Apply alignment to the entire paragraph containing the sender label and image
-                int start = chatDocument.getLength() - (sender.length() + 3) - 1; // sender + ": " + newline
+                int start = chatDocument.getLength() - (sender.length() + 3) - 1;
                 int length = chatDocument.getLength() - start;
                 chatDocument.setParagraphAttributes(start, length, alignment, false);
             } catch (BadLocationException e) {
