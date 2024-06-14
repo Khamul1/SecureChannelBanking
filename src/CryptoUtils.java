@@ -9,8 +9,8 @@ public class CryptoUtils {
             KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
             keyGen.initialize(2048);
             KeyPair pair = keyGen.generateKeyPair();
-            client.setPrivateKey(pair.getPrivate()); // Use setter method
-            client.setPublicKey(pair.getPublic()); // Use setter method
+            client.setPrivateKey(pair.getPrivate()); 
+            client.setPublicKey(pair.getPublic()); 
             client.getApp().log("Generated asymmetric keys for " + client.getClientName() +
                 "\n    Public Key: " + Base64.getEncoder().encodeToString(client.getPublicKey().getEncoded()) +
                 "\n    Private Key: " + Base64.getEncoder().encodeToString(client.getPrivateKey().getEncoded()), client.getClientName());
@@ -23,7 +23,7 @@ public class CryptoUtils {
         try {
             KeyGenerator keyGen = KeyGenerator.getInstance("AES");
             keyGen.init(256);
-            client.setSymmetricKey(keyGen.generateKey()); // Use setter method
+            client.setSymmetricKey(keyGen.generateKey()); 
             client.getApp().log("Generated symmetric key for " + client.getClientName() +
                 "\n    Symmetric Key: " + Base64.getEncoder().encodeToString(client.getSymmetricKey().getEncoded()), client.getClientName());
             sendEncryptedSymmetricKey(client);
